@@ -18,13 +18,14 @@ searches based on number of grid squares away, which is fine except that if one 
 
 proposed solutoin:
 Its not ideal, but it would be better to search 1.5 grid square rather than 0.5, as the later manual distance computation will eliminate anything to far away
+
+i suspect there is something up to do with the sign of rotational/alignment impulses, since boids seem to always end up moving rightward
 */
-// Override base class with your custom functionality
 
 constexpr int Nx = 1280;
 constexpr int Ny = 720;
 
-constexpr int num_of_boids = 200;
+constexpr int num_of_boids = 40;
 constexpr int pixelscale = 1;
 
 const int grid_size = 50;
@@ -63,11 +64,11 @@ private:
 	int m_gx; //grid coordinate position
 	int m_gy;
 public:
-	Boid(int id) {
+	Boid(int id, olc::Pixel col) {
 		m_id = id;
 
 		m_size = 2;
-		m_col = olc::BLUE;
+		m_col = col;
 		if (m_id == 0) { m_col = olc::RED; }
 
 		m_max_speed = 100.0f * (0.75f + 0.5f * static_cast<float> (rand()) / static_cast<float> (RAND_MAX)); //give it some fuzz
@@ -86,9 +87,9 @@ public:
 		m_max_force = 0.6;
 		m_max_turnspeed = 3; //about 0.5 rev/s
 		m_repulse_strength = 80; //might wanna check this, chief
-		m_equil_dist = 2;
+		m_equil_dist = 4;
 		m_cohesion_strength = m_repulse_strength / m_equil_dist;
-		m_alignment_strength = 0.05;
+		m_alignment_strength = 0.03;
 
 		m_vision = (float)grid_size;
 
@@ -178,8 +179,13 @@ public:
 
 		//rotate by up to max turnspeed*fElapsedTime
 		float rotate;
-		if (std::abs(m_heading_target - m_heading) > m_max_turnspeed) {
-			rotate = m_alignment_strength * m_max_turnspeed * fElapsedTime;
+		if (std::abs(m_heading_target - m_heading) > m_max_turnspeed) { 
+			if ((m_heading_target - m_heading) > 0) {
+				rotate = m_alignment_strength * m_max_turnspeed * fElapsedTime;
+			}
+			else {
+				rotate = -m_alignment_strength * m_max_turnspeed * fElapsedTime;
+			}
 		}
 		else {
 			rotate = m_alignment_strength * (m_heading_target - m_heading) * fElapsedTime;
@@ -188,11 +194,11 @@ public:
 		//float rotate = m_alignment_strength * min(m_heading_target - m_heading, m_max_turnspeed * fElapsedTime); //rotation amount
 		m_vel = Boid::rotate(m_vel, rotate); //convert angle to radians before passing to rotate
 		m_heading = atan2f(m_vel.y, m_vel.x);
+		
 		m_heading_target = m_heading;
-		//if (m_id == 0){ std::cout << "G: (" << m_gx << ", " << m_gy << ")\n"; }
 	}
 
-	std::vector<Boid*> find_neighbours(int rg){
+	std::vector<Boid*> find_neighbours(int rg, bool debug_trace = false){
 		std::vector<Boid*> candidate_neighbours;
 		std::vector<Boid*> neighbours;
 		std::vector<Boid*> res;
@@ -202,24 +208,6 @@ public:
 
 		for (int i = m_gx - rg; i < m_gx + rg + 1; i++) { gx_range.push_back(i); }
 		for (int i = m_gy - rg; i < m_gy + rg + 1; i++) { gy_range.push_back(i); }
-		//if ((m_gx == 0) || (m_gx == Gx)) {
-		//	gx_range = { Gx - 1, Gx, 0, 1 }; //i guess this is inefficient if Gx == 1 but in that case spatial partitioning would be pointless anyway so its not worth accounting for
-		//}
-		//else if (m_gx == Gx - 1) {
-		//	gx_range = { Gx - 2, Gx - 1, Gx, 0 };
-		//}
-		//else {
-		//	for (int i = m_gx - 1; i < m_gx + 2; i++) { gx_range.push_back(i); }
-		//}
-		//if ((m_gy == 0)|| (m_gy == Gy)) {
-		//	gy_range = { Gy - 1, Gy, 0, 1 }; //i guess this is inefficient if Gx == 1 but in that case spatial partitioning would be pointless anyway so its not worth accounting for
-		//}
-		//else if (m_gy == Gy - 1) {
-		//	gy_range = { Gy - 2, Gy - 1, Gy, 0 };
-		//}
-		//else {
-		//	for (int i = m_gy - rg; i < m_gy + rg + 1; i++) { gy_range.push_back(i); }
-		//}
 
 		std::pair<int, int> key;
 		for (std::vector<int>::iterator i = gx_range.begin(); i != gx_range.end(); i++) {
@@ -280,9 +268,6 @@ public:
 };
 
 
-std::vector<Boid> Boid::boid_list;
-std::map< std::pair<int, int>, std::vector<Boid*> > Boid::grid_table; //initialise static var
-
 class BoidsApp : public olc::PixelGameEngine
 {
 public:
@@ -293,17 +278,28 @@ public:
 	}
 
 public:
+	static olc::Pixel bgcolor;
+	static olc::Pixel gridcolor;
+	static olc::Pixel boidcolor;
+	static olc::Pixel highlightcolor;
+	
+public:
 	void place_agents() {
 		//temp debug boids
-		srand(0); //good for debugging, but change this to a proper RNG later
+		srand(42); //good for debugging, but change this to a proper RNG later
 		for (int i = 0; i < num_of_boids; i++) {
-			Boid agent(i);
+			Boid agent(i, boidcolor);
 			Boid::boid_list.push_back(agent);
 		}	
 	}
 
 	bool OnUserCreate() override
 	{
+		bgcolor = olc::Pixel(253, 246, 227);
+		gridcolor = olc::Pixel(238, 232, 213);
+		boidcolor = olc::Pixel(38, 139, 210);
+		highlightcolor = olc::Pixel(220, 50, 47);
+		
 		Gx = Nx / grid_size;
 		Gy = Ny / grid_size;
 		place_agents();
@@ -316,13 +312,13 @@ public:
 	bool OnUserUpdate(float fElapsedTime) override
 	{
 		Boid::gen_table();
-		Clear(olc::BLACK);
+		Clear(bgcolor);
 		//draw gridlines first
 		for (int i = 0; i < Gy+1; i++) {
-			DrawLine({ 0, i * grid_size }, { Nx, i * grid_size }, olc::GREY); //horiz lines
+			DrawLine({ 0, i * grid_size }, { Nx, i * grid_size }, gridcolor); //horiz lines
 		}
 		for (int i = 0; i < Gx+1; i++) {
-			DrawLine({ i * grid_size, 0 }, { i * grid_size, Ny }, olc::GREY); //vert lines
+			DrawLine({ i * grid_size, 0 }, { i * grid_size, Ny }, gridcolor); //vert lines
 		}
 
 		for (int i = 0; i < Boid::boid_list.size(); i++) {
@@ -336,6 +332,12 @@ public:
 	}
 };
 
+std::vector<Boid> Boid::boid_list;
+std::map< std::pair<int, int>, std::vector<Boid*> > Boid::grid_table; //initialise static var
+olc::Pixel BoidsApp::bgcolor;
+olc::Pixel BoidsApp::gridcolor;
+olc::Pixel BoidsApp::boidcolor;
+olc::Pixel BoidsApp::highlightcolor;
 int main()
 {
 	BoidsApp app;
