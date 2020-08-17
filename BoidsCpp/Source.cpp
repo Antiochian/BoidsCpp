@@ -179,20 +179,38 @@ public:
 
 		//rotate by up to max turnspeed*fElapsedTime
 		float rotate;
-		if (std::abs(m_heading_target - m_heading) > m_max_turnspeed) { 
-			if ((m_heading_target - m_heading) > 0) {
-				rotate = m_alignment_strength * m_max_turnspeed * fElapsedTime;
+		if (m_heading_target > m_heading) {
+			if (abs(m_heading - m_heading_target) > M_PI) {
+				//take a shortcut, go anticlockwise! (cross theta = 0 boundary)
+				rotate = -(2 * M_PI + m_heading - m_heading_target);
 			}
 			else {
-				rotate = -m_alignment_strength * m_max_turnspeed * fElapsedTime;
+				rotate = m_heading_target - m_heading;
 			}
 		}
 		else {
-			rotate = m_alignment_strength * (m_heading_target - m_heading) * fElapsedTime;
+			if (abs(m_heading - m_heading_target) > M_PI) {
+				//take a shortcut, go clockwise! (cross theta = 2pi boundary)
+				rotate = -(2 * M_PI - m_heading + m_heading_target);
+			}
+			else {
+				rotate = m_heading_target - m_heading;
+			}
+
+		}
+
+
+		if (abs(rotate) > m_max_turnspeed) {
+			if (rotate < 0) {
+				rotate = -m_max_turnspeed;
+			}
+			else {
+				rotate = m_max_turnspeed;
+			}
 		}
 		//rotate = rotate  / M_PI;
 		//float rotate = m_alignment_strength * min(m_heading_target - m_heading, m_max_turnspeed * fElapsedTime); //rotation amount
-		m_vel = Boid::rotate(m_vel, rotate); //convert angle to radians before passing to rotate
+		m_vel = Boid::rotate(m_vel, rotate*fElapsedTime*m_alignment_strength); //convert angle to radians before passing to rotate
 		m_heading = atan2f(m_vel.y, m_vel.x)+M_PI;
 		
 		m_heading_target = m_heading;
