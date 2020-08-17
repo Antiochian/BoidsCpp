@@ -9,29 +9,29 @@
 #include <tuple>
 #include <limits>
 #include <math.h>
-
+#include <chrono>
 
 /*
 KNOWN ISSUES:
-searches based on number of grid squares away, which is fine except that if one grid square is smaller than the rest 
-(i.e. when Nx is not a clean mutliple of grid_size) then search range is smaller than it should be.
-
-proposed solutoin:
-Its not ideal, but it would be better to search 1.5 grid square rather than 0.5, as the later manual distance computation will eliminate anything to far away
-
-i suspect there is something up to do with the sign of rotational/alignment impulses, since boids seem to always end up moving rightward
+problem:
+	searches based on number of grid squares away, which is fine except that if one grid square is smaller than the rest 
+	(i.e. when Nx is not a clean mutliple of grid_size) then search range is smaller than it should be.
+solution:
+	Its not ideal, but it would be better to search 1.5 grid square rather than 0.5, as the later manual distance computation will eliminate anything to far away
 */
 
 constexpr int Nx = 1280;
 constexpr int Ny = 720;
 
-constexpr int num_of_boids = 40;
+constexpr int num_of_boids = 400;
 constexpr int pixelscale = 1;
 
 const int grid_size = 50;
 const int bar_width = 1;
 int Gx; //number of grid squares across (determined in gen_grid func)
 int Gy;
+
+
 
 class Boid {
 public:
@@ -49,7 +49,7 @@ public:
 
 	int m_size;
 	olc::Pixel m_col; //color of boid
-
+	float m_vision; //vision range
 private:
 	float m_max_force; //constants that determine motion characteristics
 	float m_max_speed;
@@ -59,7 +59,7 @@ private:
 	float m_cohesion_strength;
 	float m_alignment_strength;
 
-	float m_vision; //vision range
+	
 
 	int m_gx; //grid coordinate position
 	int m_gy;
@@ -73,23 +73,23 @@ public:
 
 		m_max_speed = 100.0f * (0.75f + 0.5f * static_cast<float> (rand()) / static_cast<float> (RAND_MAX)); //give it some fuzz
 
-		//start off with random position + speed
+		//start off with random position + direction
 		olc::vf2d startpos(static_cast <float> (rand()) / static_cast <float> (RAND_MAX / Nx), static_cast <float> (rand()) / static_cast <float> (RAND_MAX / Ny));
-		olc::vf2d startvel(static_cast <float> (rand()) / static_cast <float> (RAND_MAX / m_max_speed), static_cast <float> (rand()) / static_cast <float> (RAND_MAX / m_max_speed));
-		startvel = (2 * startvel) - olc::vf2d(m_max_speed, m_max_speed);
 		m_pos = startpos;
-		m_vel = startvel;
-
-
-		m_heading = atan2f(m_vel.y, m_vel.x);
+		//pick random heading
+		m_heading = static_cast <float> (rand()) / static_cast <float> (RAND_MAX / (M_PI));
+		m_heading += M_PI / 2;
+		//std::cout << m_heading * 360 / (2 * M_PI) << std::endl;
 		m_heading_target = m_heading;
+		m_vel = m_max_speed * olc::vf2d(std::cos(m_heading), std::sin(m_heading));
+		
 
-		m_max_force = 0.6;
+		m_max_force = 2;
 		m_max_turnspeed = 3; //about 0.5 rev/s
 		m_repulse_strength = 80; //might wanna check this, chief
 		m_equil_dist = 4;
 		m_cohesion_strength = m_repulse_strength / m_equil_dist;
-		m_alignment_strength = 0.03;
+		m_alignment_strength =1;
 
 		m_vision = (float)grid_size;
 
@@ -190,15 +190,15 @@ public:
 		else {
 			rotate = m_alignment_strength * (m_heading_target - m_heading) * fElapsedTime;
 		}
-		rotate = rotate *180 / M_PI;
+		//rotate = rotate  / M_PI;
 		//float rotate = m_alignment_strength * min(m_heading_target - m_heading, m_max_turnspeed * fElapsedTime); //rotation amount
 		m_vel = Boid::rotate(m_vel, rotate); //convert angle to radians before passing to rotate
-		m_heading = atan2f(m_vel.y, m_vel.x);
+		m_heading = atan2f(m_vel.y, m_vel.x)+M_PI;
 		
 		m_heading_target = m_heading;
 	}
 
-	std::vector<Boid*> find_neighbours(int rg, bool debug_trace = false){
+	std::vector<Boid*> find_neighbours(int rg){
 		std::vector<Boid*> candidate_neighbours;
 		std::vector<Boid*> neighbours;
 		std::vector<Boid*> res;
@@ -241,18 +241,31 @@ public:
 		float avg_heading = 0;
 		bool exist_neighbours = false;
 		for (int i = 0; i < neighbours.size(); i++) {
+
 			exist_neighbours = true;
 			Boid* neighbour = neighbours[i];
+
+			if (isnan((*neighbour).m_heading)) {
+				LOG("ouch!");
+			}
 			//draw blue lines here if you want
 			//apply repulsion
 			float mag;
 			olc::vf2d norm;
 			std::tie(mag, norm) = Boid::measure_distance((*neighbour).m_pos, m_pos);
-			m_accel += m_repulse_strength  * norm / mag;
+			if (mag != 0){
+				m_accel += m_repulse_strength * norm / mag;
+			}
+			else {
+				LOG("Ouch!");
+			}
 			//apply cohesion
 			avg_pos += (*neighbour).m_pos;
 			//align
 			avg_heading += (*neighbour).m_heading;
+			if (isnan(m_accel.x)) {
+				LOG("ouch!");
+			}
 		}
 		if (exist_neighbours) {
 			olc::vf2d cohesion_target = avg_pos / neighbours.size();
@@ -262,6 +275,10 @@ public:
 			m_accel += m_cohesion_strength * normal;
 			m_heading_target = avg_heading / neighbours.size();
 		}
+		else {
+			m_heading_target = m_heading;
+		}
+
 		//m_accel = olc::vf2d(0, -10);
 		//pass
 	}
@@ -286,11 +303,25 @@ public:
 public:
 	void place_agents() {
 		//temp debug boids
-		srand(42); //good for debugging, but change this to a proper RNG later
+		//good for debugging, but change this to a proper RNG later
+		Boid::boid_list.clear();
 		for (int i = 0; i < num_of_boids; i++) {
 			Boid agent(i, boidcolor);
 			Boid::boid_list.push_back(agent);
 		}	
+	}
+
+	void reset_scene() {
+		//int t_seed = time(0);
+		int t_seed = 1597699660;
+		srand(t_seed);
+		auto start = std::chrono::high_resolution_clock::now();
+		place_agents();
+		Boid::gen_table();
+		auto finish = std::chrono::high_resolution_clock::now();
+		std::chrono::duration<double> t_time(finish - start);
+		std::cout << num_of_boids << " agents generated in " << t_time.count() << " seconds" << std::endl;
+		std::cout << "Seed: " << t_seed << std::endl;
 	}
 
 	bool OnUserCreate() override
@@ -302,8 +333,7 @@ public:
 		
 		Gx = Nx / grid_size;
 		Gy = Ny / grid_size;
-		place_agents();
-		Boid::gen_table();
+		reset_scene();
 		// Called once at the start, so create things here
 
 		return true;
@@ -321,11 +351,25 @@ public:
 			DrawLine({ i * grid_size, 0 }, { i * grid_size, Ny }, gridcolor); //vert lines
 		}
 
+
+
 		for (int i = 0; i < Boid::boid_list.size(); i++) {
 			Boid* candidate = &Boid::boid_list[i];
 			(*candidate).calculate_movement(fElapsedTime);
 			(*candidate).update(fElapsedTime);
 			FillCircle((*candidate).m_pos, (*candidate).m_size, (*candidate).m_col); //draw boid
+
+			if ((GetMouse(0).bHeld) && ((*candidate).m_id == 0)) {//draw debug trace on mouseclick
+				std::vector<Boid*> neighbours = (*candidate).find_neighbours((*candidate).m_vision / grid_size);
+				for (std::vector<Boid*>::iterator it = neighbours.begin(); it != neighbours.end(); it++) {
+					olc::vf2d targ_pos = (*(*it)).m_pos;
+					DrawLine((*candidate).m_pos, targ_pos, highlightcolor);
+				}
+			}
+		}
+
+		if (GetKey(olc::SPACE).bPressed) {
+			reset_scene();
 		}
 
 		return true;
@@ -334,10 +378,12 @@ public:
 
 std::vector<Boid> Boid::boid_list;
 std::map< std::pair<int, int>, std::vector<Boid*> > Boid::grid_table; //initialise static var
+
 olc::Pixel BoidsApp::bgcolor;
 olc::Pixel BoidsApp::gridcolor;
 olc::Pixel BoidsApp::boidcolor;
 olc::Pixel BoidsApp::highlightcolor;
+
 int main()
 {
 	BoidsApp app;
