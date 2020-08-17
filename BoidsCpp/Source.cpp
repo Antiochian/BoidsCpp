@@ -22,8 +22,8 @@ solution:
 
 constexpr int Nx = 1280;
 constexpr int Ny = 720;
+constexpr int default_num_of_boids = 400;
 
-constexpr int num_of_boids = 400;
 constexpr int pixelscale = 1;
 
 const int grid_size = 50;
@@ -70,12 +70,13 @@ public:
 
 		m_max_speed = 100.0f * (0.75f + 0.5f * static_cast<float> (rand()) / static_cast<float> (RAND_MAX)); //give it some fuzz
 
-		//start off with random position + direction
+		//start off with random position + velocity
+		float start_speed = static_cast <float> (rand()) / static_cast <float> (RAND_MAX / m_max_speed);
 		olc::vf2d startpos(static_cast <float> (rand()) / static_cast <float> (RAND_MAX / Nx), static_cast <float> (rand()) / static_cast <float> (RAND_MAX / Ny));
 		m_pos = startpos;
 		//pick random heading
 		float heading = static_cast <float> (rand()) / static_cast <float> (RAND_MAX / (2*M_PI));
-		m_vel = m_max_speed * olc::vf2d(std::cos(heading), std::sin(heading));
+		m_vel = start_speed * olc::vf2d(std::cos(heading), std::sin(heading));
 		
 
 		m_max_force = 100;
@@ -265,31 +266,50 @@ public:
 	static olc::Pixel gridcolor;
 	static olc::Pixel boidcolor;
 	static olc::Pixel highlightcolor;
-	
+
+private:
+	int next_ID;
+	int num_of_boids;
+
 public:
 	void place_agents() {
 		//temp debug boids
 		//good for debugging, but change this to a proper RNG later
 		Boid::boid_list.clear();
 		for (int i = 0; i < num_of_boids; i++) {
-			Boid agent(i, boidcolor);
+			Boid agent(next_ID, boidcolor);
+			next_ID++;
 			Boid::boid_list.push_back(agent);
 		}	
 	}
 
 	void reset_scene() {
+		next_ID = 0;
+		num_of_boids = default_num_of_boids;
+
 		int t_seed = time(0);
 		//int t_seed = 1597699660;
 		srand(t_seed);
 		auto start = std::chrono::high_resolution_clock::now();
+
 		place_agents();
 		Boid::gen_table();
+		
 		auto finish = std::chrono::high_resolution_clock::now();
 		std::chrono::duration<double> t_time(finish - start);
 		std::cout << num_of_boids << " agents generated in " << t_time.count() << " seconds" << std::endl;
 		std::cout << "Seed: " << t_seed << std::endl;
 	}
 
+	void create_boid(olc::vf2d pos) {
+		num_of_boids += 1;
+		Boid agent(next_ID, boidcolor);
+		agent.m_pos = pos;
+		next_ID++;
+		Boid::boid_list.push_back(agent);
+		Boid::gen_table();
+
+	}
 	bool OnUserCreate() override
 	{
 		bgcolor = olc::Pixel(253, 246, 227);
@@ -311,10 +331,10 @@ public:
 		Clear(bgcolor);
 		//draw gridlines first
 		for (int i = 0; i < Gy+1; i++) {
-			DrawLine({ 0, i * grid_size }, { Nx, i * grid_size }, gridcolor); //horiz lines
+			DrawLine({ 0, i * grid_size }, { Nx, i * grid_size }, gridcolor, 0xF0F0F0F0); //horiz lines
 		}
 		for (int i = 0; i < Gx+1; i++) {
-			DrawLine({ i * grid_size, 0 }, { i * grid_size, Ny }, gridcolor); //vert lines
+			DrawLine({ i * grid_size, 0 }, { i * grid_size, Ny }, gridcolor, 0xF0F0F0F0); //vert lines
 		}
 
 
@@ -325,13 +345,18 @@ public:
 			(*candidate).update(fElapsedTime);
 			FillCircle((*candidate).m_pos, (*candidate).m_size, (*candidate).m_col); //draw boid
 
-			if ((GetMouse(0).bHeld) && ((*candidate).m_id == 0)) {//draw debug trace on mouseclick
+			if ((GetMouse(1).bHeld) && ((*candidate).m_id == 0)) {//draw debug trace on mouseclick
 				std::vector<Boid*> neighbours = (*candidate).find_neighbours((*candidate).m_vision / grid_size);
 				for (std::vector<Boid*>::iterator it = neighbours.begin(); it != neighbours.end(); it++) {
 					olc::vf2d targ_pos = (*(*it)).m_pos;
-					DrawLine((*candidate).m_pos, targ_pos, highlightcolor);
+					DrawLine((*candidate).m_pos, targ_pos, highlightcolor, 0xF0F0F0F0);
 				}
 			}
+		}
+
+		if (GetMouse(0).bPressed) {
+			std::cout << "Making new boid" << std::endl;
+			create_boid(GetMousePos());
 		}
 
 		if (GetKey(olc::SPACE).bPressed) {
