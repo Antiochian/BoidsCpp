@@ -3,8 +3,17 @@
 #include <vector>
 #include <tuple>
 #include <limits>
+#include <math.h>
 
 // Override base class with your custom functionality
+
+constexpr int Nx = 1280;
+constexpr int Ny = 720;
+
+const int grid_size = 50;
+const int bar_width = 1;
+int Gx; //number of grid squares across (determined in gen_grid func)
+int Gy;
 
 class Boid {
 public:
@@ -39,7 +48,7 @@ public:
 	Boid(int id) {
 		int m_id = id;
 		//random position
-		olc::vf2d startpos(static_cast <float> (rand()) / static_cast <float> (RAND_MAX / BoidsApp::Nx), static_cast <float> (rand()) / static_cast <float> (RAND_MAX / BoidsApp::Ny));
+		olc::vf2d startpos(static_cast <float> (rand()) / static_cast <float> (RAND_MAX / Nx), static_cast <float> (rand()) / static_cast <float> (RAND_MAX / Ny));
 		m_col = olc::BLUE;
 
 		m_max_force = 0.6;
@@ -50,7 +59,7 @@ public:
 		m_cohesion_strength = m_repulse_strength / m_equil_dist;
 		m_alignment_strength = 1;
 
-		m_vision = (float)BoidsApp::grid_size;
+		m_vision = (float)grid_size;
 	}
 
 	static void gen_table(){
@@ -82,14 +91,6 @@ public:
 		sAppName = "Boids v2";
 	}
 
-	static const int Nx = 1280;
-	static const int Ny = 720;
-	static const int grid_size = 50;
-	static const int bar_width = 1;
-	static int Gx; //number of grid squares across (determined in gen_grid func)
-	static int Gy;
-
-
 public:
 	void place_agents() {
 		//initialise grid
@@ -99,19 +100,23 @@ public:
 	std::tuple<float, olc::vf2d> measure_distance(olc::vf2d vec1, olc::vf2d vec2) {
 		//measure distance between points and create normal pointing FROM vec1 TO vec2
 		//(there is a subtlety here due to toroidal world requirements)
-		float best = std::numeric_limits<float>::infinity();
+		float best_mag2 = std::numeric_limits<float>::infinity();
+		olc::vf2d best_reflection;
+
 		float reflection_mag2;
 		olc::vf2d reflection;
 		for (int i = -1; i < 2; i++) {
 			for (int j = -1; j < 2; j++) {
 				reflection = (vec2 + olc::vf2d(Nx * i, Ny * j)) - vec1; //create nine mirror images and check them all
 				reflection_mag2 = reflection.mag2();
-				if (reflection_mag2 < best);
+				if (reflection_mag2 < best_mag2) {
+					best_mag2 = reflection_mag2;
+					best_reflection = reflection;
+				}
 			}
 		}
-
+		return std::make_tuple((float)std::sqrt(best_mag2), reflection);
 	}
-
 	bool OnUserCreate() override
 	{
 		Gx = Nx / grid_size;
@@ -125,17 +130,17 @@ public:
 	bool OnUserUpdate(float fElapsedTime) override
 	{
 		//draw gridlines first
-		for (int i = 0; i < Gx; i++) {
-			DrawLine({ 0, i * grid_size }, { Ny, i * grid_size }, olc::GREY); //vert lines
+		for (int i = 0; i < Gy+1; i++) {
+			DrawLine({ 0, i * grid_size }, { Nx, i * grid_size }, olc::GREY); //horiz lines
 		}
-		for (int i = 0; i < Gy; i++) {
-			DrawLine({ i * grid_size, 0 }, { i * grid_size, Nx }, olc::GREY); //horiz lines
+		for (int i = 0; i < Gx+1; i++) {
+			DrawLine({ i * grid_size, 0 }, { i * grid_size, Ny }, olc::GREY); //vert lines
 		}
 
 		// called once per frame, draws random coloured pixels
-		for (int x = 0; x < ScreenWidth(); x++)
+		/*for (int x = 0; x < ScreenWidth(); x++)
 			for (int y = 0; y < ScreenHeight(); y++)
-				Draw(x, y, olc::Pixel(rand() % 256, rand() % 256, rand() % 256));
+				Draw(x, y, olc::Pixel(rand() % 256, rand() % 256, rand() % 256));*/
 		return true;
 	}
 };
@@ -143,7 +148,7 @@ public:
 int main()
 {
 	BoidsApp app;
-	if (app.Construct(256, 240, 4, 4))
+	if (app.Construct(Nx, Ny, 1, 1))
 		app.Start();
 	return 0;
 }
