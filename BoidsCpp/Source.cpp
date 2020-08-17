@@ -41,9 +41,6 @@ public:
 	int m_id; //agent id
 	olc::vf2d m_pos; //agent position
 
-	float m_heading;
-	float m_heading_target;
-
 	olc::vf2d m_vel;
 	olc::vf2d m_accel;
 
@@ -77,19 +74,16 @@ public:
 		olc::vf2d startpos(static_cast <float> (rand()) / static_cast <float> (RAND_MAX / Nx), static_cast <float> (rand()) / static_cast <float> (RAND_MAX / Ny));
 		m_pos = startpos;
 		//pick random heading
-		m_heading = static_cast <float> (rand()) / static_cast <float> (RAND_MAX / (M_PI));
-		m_heading += M_PI / 2;
-		//std::cout << m_heading * 360 / (2 * M_PI) << std::endl;
-		m_heading_target = m_heading;
-		m_vel = m_max_speed * olc::vf2d(std::cos(m_heading), std::sin(m_heading));
+		float heading = static_cast <float> (rand()) / static_cast <float> (RAND_MAX / (2*M_PI));
+		m_vel = m_max_speed * olc::vf2d(std::cos(heading), std::sin(heading));
 		
 
-		m_max_force = 2;
+		m_max_force = 100;
 		m_max_turnspeed = 3; //about 0.5 rev/s
-		m_repulse_strength = 80; //might wanna check this, chief
+		m_repulse_strength = 2.5; //might wanna check this, chief
 		m_equil_dist = 4;
 		m_cohesion_strength = m_repulse_strength / m_equil_dist;
-		m_alignment_strength =1;
+		m_alignment_strength = 10;
 
 		m_vision = (float)grid_size;
 
@@ -176,44 +170,6 @@ public:
 
 		m_gx = m_pos.x / grid_size;
 		m_gy = m_pos.y / grid_size;
-
-		//rotate by up to max turnspeed*fElapsedTime
-		float rotate;
-		if (m_heading_target > m_heading) {
-			if (abs(m_heading - m_heading_target) > M_PI) {
-				//take a shortcut, go anticlockwise! (cross theta = 0 boundary)
-				rotate = -(2 * M_PI + m_heading - m_heading_target);
-			}
-			else {
-				rotate = m_heading_target - m_heading;
-			}
-		}
-		else {
-			if (abs(m_heading - m_heading_target) > M_PI) {
-				//take a shortcut, go clockwise! (cross theta = 2pi boundary)
-				rotate = -(2 * M_PI - m_heading + m_heading_target);
-			}
-			else {
-				rotate = m_heading_target - m_heading;
-			}
-
-		}
-
-
-		if (abs(rotate) > m_max_turnspeed) {
-			if (rotate < 0) {
-				rotate = -m_max_turnspeed;
-			}
-			else {
-				rotate = m_max_turnspeed;
-			}
-		}
-		//rotate = rotate  / M_PI;
-		//float rotate = m_alignment_strength * min(m_heading_target - m_heading, m_max_turnspeed * fElapsedTime); //rotation amount
-		m_vel = Boid::rotate(m_vel, rotate*fElapsedTime*m_alignment_strength); //convert angle to radians before passing to rotate
-		m_heading = atan2f(m_vel.y, m_vel.x)+M_PI;
-		
-		m_heading_target = m_heading;
 	}
 
 	std::vector<Boid*> find_neighbours(int rg){
@@ -256,16 +212,13 @@ public:
 	void calculate_movement(float fElapsedTime) {
 		std::vector<Boid*> neighbours = find_neighbours((int) (m_vision/grid_size) + 1);
 		olc::vf2d avg_pos(0, 0);
-		float avg_heading = 0;
+		olc::vf2d avg_vel(0, 0);
 		bool exist_neighbours = false;
 		for (int i = 0; i < neighbours.size(); i++) {
 
 			exist_neighbours = true;
 			Boid* neighbour = neighbours[i];
 
-			if (isnan((*neighbour).m_heading)) {
-				LOG("ouch!");
-			}
 			//draw blue lines here if you want
 			//apply repulsion
 			float mag;
@@ -280,23 +233,18 @@ public:
 			//apply cohesion
 			avg_pos += (*neighbour).m_pos;
 			//align
-			avg_heading += (*neighbour).m_heading;
-			if (isnan(m_accel.x)) {
-				LOG("ouch!");
-			}
+			avg_vel += m_max_speed*(*neighbour).m_vel.norm();
 		}
 		if (exist_neighbours) {
 			olc::vf2d cohesion_target = avg_pos / neighbours.size();
+			olc::vf2d alignment_target = avg_vel / neighbours.size();
 			float mag;
 			olc::vf2d normal;
 			std::tie(mag, normal) = Boid::measure_distance(m_pos, cohesion_target);
-			m_accel += m_cohesion_strength * normal;
-			m_heading_target = avg_heading / neighbours.size();
+			//m_accel += m_cohesion_strength * normal;
+			m_accel += m_cohesion_strength * (cohesion_target - m_pos);
+			m_accel += m_alignment_strength * (alignment_target - m_vel);
 		}
-		else {
-			m_heading_target = m_heading;
-		}
-
 		//m_accel = olc::vf2d(0, -10);
 		//pass
 	}
@@ -330,8 +278,8 @@ public:
 	}
 
 	void reset_scene() {
-		//int t_seed = time(0);
-		int t_seed = 1597699660;
+		int t_seed = time(0);
+		//int t_seed = 1597699660;
 		srand(t_seed);
 		auto start = std::chrono::high_resolution_clock::now();
 		place_agents();
