@@ -1,4 +1,5 @@
 #define OLC_PGE_APPLICATION
+#define LOG(x) (std::cout << x << std::endl) //homebrew logger
 #include "olcPixelGameEngine.h"
 #include <vector>
 #include <tuple>
@@ -7,8 +8,9 @@
 
 // Override base class with your custom functionality
 
-constexpr int Nx = 1280;
-constexpr int Ny = 720;
+constexpr int Nx = 960;
+constexpr int Ny = 480;
+constexpr int pixelscale = 1;
 
 const int grid_size = 50;
 const int bar_width = 1;
@@ -26,12 +28,13 @@ public:
 	float m_heading;
 	float m_heading_target;
 
-private:
+
 	olc::vf2d m_vel;
 	olc::vf2d m_accel;
 
+	int m_size;
 	olc::Pixel m_col; //color of boid
-	
+private:
 	float m_max_force; //constants that determine motion characteristics
 	float m_max_speed;
 	float m_max_turnspeed;
@@ -47,6 +50,7 @@ private:
 public:
 	Boid(int id) {
 		int m_id = id;
+		m_size = 5;
 		//random position
 		olc::vf2d startpos(static_cast <float> (rand()) / static_cast <float> (RAND_MAX / Nx), static_cast <float> (rand()) / static_cast <float> (RAND_MAX / Ny));
 		m_col = olc::BLUE;
@@ -60,6 +64,26 @@ public:
 		m_alignment_strength = 1;
 
 		m_vision = (float)grid_size;
+
+		//set grid coordinates
+		/*self.gx,self.gy = self.pos//grid_size #current grid cell (goes from -1 to 8)
+        if self.gx < 0:
+            self.gx = Gx
+        elif self.gx > Gx:
+            self.gx = 0
+        if self.gy < 0:
+            self.gy = Gy
+        elif self.gy > Gy:
+            self.gy = 0*/
+
+		m_gx = (int)(m_pos.x / grid_size);
+		m_gy = (int)(m_pos.y / grid_size);
+		//toroidal rollover
+		if (m_gx < 0) { m_gx = Gx; }
+		if (m_gx > 0) { m_gx = 0; }
+		if (m_gy < 0) { m_gy = Gy; }
+		if (m_gy > 0) { m_gy = 0; }
+
 	}
 
 	static void gen_table(){
@@ -68,18 +92,34 @@ public:
 
 	void update(float fElapsedTime) {
 		//update self
-	}
-
-	void draw() {
-		//draw self (could be pulled out if necessary)
+		m_pos += fElapsedTime * m_vel;
+		m_vel += fElapsedTime * m_accel;
+		if (m_vel.mag2() > m_max_speed * m_max_speed) {
+			m_vel = m_max_speed * m_vel.norm();
+		}
+		LOG(m_vel);
+		m_accel = olc::vf2d(0, 0);
+		//clamp position
+		if (m_pos.x < 0) { m_pos.x = Nx; }
+		else if (m_pos.x > Nx) { m_pos.x = 0; }
+		if (m_pos.y < 0) { m_pos.y = Ny; }
+		else if (m_pos.y > Ny) { m_pos.y = 0; }
+		//m_pos.x = ((int)m_pos.x) % Nx;
+		//m_pos.y = ((int)m_pos.y) % Ny;
 	}
 
 	std::vector<Boid> find_neighbours(int rg = 1){
 		//get neighbours using grid table
 	}
+
+	void calculate_movement() {
+		m_accel = olc::vf2d(0, -10);
+		//pass
+	}
 };
 
-std::vector<Boid> boid_list;
+
+std::vector<Boid> Boid::boid_list;
 std::map< std::pair<int, int>, std::vector<Boid> > Boid::grid_table; //initialise static var
 
 class BoidsApp : public olc::PixelGameEngine
@@ -124,19 +164,35 @@ public:
 		place_agents();
 		Boid::gen_table();
 		// Called once at the start, so create things here
+		//debug loner
+
+		Boid loner(0);
+		loner.m_pos = olc::vf2d(Nx / 2, Ny / 2);
+		loner.m_vel = olc::vf2d(40,40);
+		Boid::boid_list.push_back(loner);
 		return true;
 	}
 
 	bool OnUserUpdate(float fElapsedTime) override
 	{
+		Clear(olc::BLACK);
 		//draw gridlines first
-		for (int i = 0; i < Gy+1; i++) {
-			DrawLine({ 0, i * grid_size }, { Nx, i * grid_size }, olc::GREY); //horiz lines
-		}
-		for (int i = 0; i < Gx+1; i++) {
-			DrawLine({ i * grid_size, 0 }, { i * grid_size, Ny }, olc::GREY); //vert lines
-		}
+		//for (int i = 0; i < Gy+1; i++) {
+		//	DrawLine({ 0, i * grid_size }, { Nx, i * grid_size }, olc::GREY); //horiz lines
+		//}
+		//for (int i = 0; i < Gx+1; i++) {
+		//	DrawLine({ i * grid_size, 0 }, { i * grid_size, Ny }, olc::GREY); //vert lines
+		//}
 
+		for (int i = 0; i < Boid::boid_list.size(); i++) {
+			Boid* candidate = &Boid::boid_list[i];
+			(*candidate).calculate_movement();
+			(*candidate).update(fElapsedTime);
+			FillCircle((*candidate).m_pos, (*candidate).m_size, (*candidate).m_col);
+			//LOG((*candidate).m_pos);
+			//draw_boid()
+
+		}
 		// called once per frame, draws random coloured pixels
 		/*for (int x = 0; x < ScreenWidth(); x++)
 			for (int y = 0; y < ScreenHeight(); y++)
@@ -148,7 +204,7 @@ public:
 int main()
 {
 	BoidsApp app;
-	if (app.Construct(Nx, Ny, 1, 1))
+	if (app.Construct(Nx, Ny, pixelscale, pixelscale))
 		app.Start();
 	return 0;
 }
