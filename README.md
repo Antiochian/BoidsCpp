@@ -8,10 +8,10 @@ One of the benefits of the programs newfound robustness is that I was able to ea
 
 Gallery
 -------
-| demo video | adding new boids |
+| demo video | adding new boids (left click) |
 |:---:|:---:|
 |![](demo1.gif)|![](demo2.gif)
-| debug trace mode | reset button |
+| debug trace mode (right click)| reset function (spacebar) |
 |![](demo3.gif)|![](demo4.gif)
 
 What is it?
