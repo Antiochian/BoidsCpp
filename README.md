@@ -24,4 +24,4 @@ This is a super useful and beautifully simple technique for modelling crowd beha
  - packs of animals
  - hordes of zombies
  
- 
+ This program uses the excellent "olcPixelGameEngine" library by [David Barr](https://github.com/OneLoneCoder) to handle all the visuals.
