@@ -1,5 +1,7 @@
 # BoidsCpp
-A C++ rewrite of my agent-based boid model from [a while ago](https://github.com/Antiochian/boids)
+Swarming agents, visualised
+
+An improved C++ version of my agent-based boid model from [a while ago](https://github.com/Antiochian/boids)
 
 This was originally supposed to be a straight port of my Python Boids project into C++ to improve the framerate, but during the process of making this I had several epiphanies and ended up completely reworking the algorithm into a much better-executing and better-performing form. Amazing!
 
@@ -10,8 +12,7 @@ Gallery
 | demo video | adding new boids |
 |:---:|:---:|
 |![](demo1.gif)|![](demo2.gif)
-| debug mode | reset button |
-|:---:|:---:|
+| debug trace mode | reset button |
 |![](demo3.gif)|![](demo4.gif)
 
 What is it?
