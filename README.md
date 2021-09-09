@@ -2,9 +2,9 @@
 Swarming agents, visualised.
 
 This is a much-improved C++ version of my agent-based boid model from [a while ago](https://github.com/Antiochian/boids).
-This was originally supposed to be a straight port of my Python Boids project into C++ to improve the framerate, but during the process of making this I had several epiphanies and ended up completely reworking the algorithm into a much better-executing and better-performing form. Amazing!
+This was originally supposed to be a straight port of my Python Boids project into C++ to improve the framerate, but during the process of making this I had several epiphanies and ended up completely reworking the algorithm into a much better-executing and better-performing form. Amazing! Another new feature is a spatial partitioning system for much more efficient collision detection for large numbers of agents.
 
-One of the benefits of the programs newfound robustness is that I was able to easily implement dynamic addition/deletion of boids - simply click anywhere on the screen and a new boid will be created with a random starting velocity. You can also *hold* right click to enter "debug mode", which will cause one boid's vision range to be highlighed in red, or hit space to reset everything.
+One of the benefits of the program's newfound robustness is that I was able to easily implement dynamic addition/deletion of boids - simply click anywhere on the screen and a new boid will be created with a random starting velocity. You can also *hold* right click to enter "debug mode", which will cause one boid's vision range to be highlighed in red, or hit space to reset everything.
 
 Gallery
 -------
